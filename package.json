@@ -1,0 +1,24 @@
+{
+  "name": "konverson-online",
+  "version": "1.0.0",
+  "description": "Real-time multiplayer board game Konverson",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "game",
+    "multiplayer",
+    "socket.io",
+    "nodejs"
+  ],
+  "author": "XaXua Games",
+  "license": "ISC"
+}
