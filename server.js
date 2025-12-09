@@ -4,15 +4,20 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const path = require('path');
 
+// Serve static files from 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- GAME LOGIC ---
+// --- GAME LOGIC (Shared) ---
 const DEFAULT_BOARD_SIZE = 13;
 const ALLOWED_SIZES = [9, 11, 13, 15]; 
 const COLORS = ['A', 'B', 'C', 'D'];
-const TEAMS = { 'A': 'AC', 'C': 'AC', 'B': 'BD', 'D': 'BD' };
+const TEAMS = {
+    'A': 'AC', 'C': 'AC', // Player 1
+    'B': 'BD', 'D': 'BD'  // Player 2
+};
 const PAWN_NEW = 'new';
 const PAWN_OLD = 'old';
+
 const DIRS = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
 const ZONE_INTERIOR = 0; const ZONE_PREBORDER = 1; const ZONE_BORDER = 2; const ZONE_CORNER = 3;
 
@@ -47,11 +52,14 @@ class GameState {
         return ZONE_INTERIOR;
     }
 
-    hasNeighbor(r, c) {
+    hasNeighbor(r, c, zoneType = null) {
         for (let d of DIRS) {
             const nr = r + d[0], nc = c + d[1];
             if (nr >= 0 && nr < this.size && nc >= 0 && nc < this.size) {
-                if (this.grid[nr][nc]) return true;
+                if (this.grid[nr][nc]) {
+                    if (zoneType === null) return true;
+                    if (this.getZone(nr, nc) === zoneType) return true;
+                }
             }
         }
         return false;
@@ -72,8 +80,8 @@ class GameState {
         }
         const zone = this.getZone(r, c);
         if (zone === ZONE_INTERIOR) return true;
-        if (zone === ZONE_PREBORDER) return this.hasNeighbor(r, c);
-        if (zone === ZONE_BORDER) return this.hasNeighbor(r, c); // zone check simplified for brevity but correct
+        if (zone === ZONE_PREBORDER) return this.hasNeighbor(r, c, ZONE_INTERIOR);
+        if (zone === ZONE_BORDER) return this.hasNeighbor(r, c, ZONE_PREBORDER);
         if (zone === ZONE_CORNER) return this.hasDiagonalPreborderNeighbor(r, c);
         return false;
     }
@@ -115,17 +123,31 @@ class GameState {
             const path = [];
             let currR = r + d[0], currC = c + d[1];
             let foundPincer = false;
-            let lineEnemyColor = null;
+            let lineEnemyColor = null; // Track the specific color being captured
+
             while (currR >= 0 && currR < this.size && currC >= 0 && currC < this.size) {
                 const p = this.grid[currR][currC];
                 if (!p) break;
-                if (p.color === myColor) { foundPincer = true; break; }
+                
+                if (p.color === myColor) {
+                    foundPincer = true;
+                    break;
+                }
+                
                 if (p.posture === PAWN_NEW) break;
-                if (lineEnemyColor === null) lineEnemyColor = p.color;
-                else if (p.color !== lineEnemyColor) break;
+                
+                // NEW: Ensure all pawns in the line are of the exact same color
+                if (lineEnemyColor === null) {
+                    lineEnemyColor = p.color;
+                } else if (p.color !== lineEnemyColor) {
+                    break; // Line contains mixed colors, invalid capture
+                }
+
                 path.push({r: currR, c: currC, pawn: p});
-                currR += d[0]; currC += d[1];
+                currR += d[0];
+                currC += d[1];
             }
+
             if (foundPincer && path.length > 0) {
                 for (let item of path) {
                     item.pawn.prevColor = item.pawn.color; 
